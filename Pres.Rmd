@@ -1,8 +1,8 @@
 ---
 title: "Задание банка Открытие"
 output:
-  html_document: default
   html_notebook: default
+  html_document: default
   pdf_document: default
 ---
 ```{r setup, include=FALSE,message=FALSE,warning=FALSE}
