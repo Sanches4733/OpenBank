@@ -1,11 +1,13 @@
 ---
 title: "Задание банка Открытие"
-output: pdf_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 ```{r setup, include=FALSE,message=FALSE,warning=FALSE}
 knitr::opts_chunk$set(echo = FALSE,warning = FALSE)
 library(dplyr);library(tidyr);library(readxl);library(readr);library(ggplot2);
-library(knitr);
+library(knitr);library(Rmisc);
 ```
 # Подготовка данных
 Для начала считаем данные из файла и взглянем на них.
@@ -45,9 +47,30 @@ od[!complete.cases(od),]
 Возникает предположение, что это отделение закрылось. Посмотрим, есть ли какие-то очевидные поводы для
 такого решения.
 
-Построим графики, отражающие количество заявок на кредиты в каждом банке.
+Для начала добавим в нашу таблицу столбцы с абсолютным количеством одобренных заявок,
+а так же "уровень согласия" - то есть процент одобренных заявок, на которые согласились клиенты.
 ```{r}
-qplot(Month,Requests,data = od,color = Bank,geom = "line")
+od <- od %>%
+        mutate(Approved = Requests*Approval,Accepted = Issues/Approved) %>%
+        select(c(1,2,3,6,5,4,7))
+od
 ```
-Действительно, в банк E почти всегда подавалось наименьшее количество заявок.
+
+
+Построим графики, отражающие количество заявок, одобренных заявок и выданных кредитов в каждом банке.
+```{r}
+grequests <- ggplot(od, aes(x=Month, y=Requests, colour=Bank)) +
+    geom_line() +
+    ggtitle("Заявки")
+gapproved <- ggplot(od, aes(x=Month, y=Approved, colour=Bank)) +
+    geom_line() +
+    ggtitle("Одобрено")
+gissues <- ggplot(od, aes(x=Month, y=Issues, colour=Bank)) +
+    geom_line() +
+    ggtitle("Выдано")
+multiplot(grequests,gapproved,gissues,cols = 2)
+```
+Действительно, в банк E долгое время подавалось наименьшее количество заявок, почти
+всегда там одобрялось наименьшее количество заявок и всегда там выпускалось наименьшее 
+количество кредитов.
 Возможно, он находился в районе с малым числом потенциальных клиентов. 
