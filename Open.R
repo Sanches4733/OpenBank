@@ -14,3 +14,13 @@ od <- od %>%
 od <- od %>%
         mutate(Approved = Requests*Approval,Accepted = Issues/Approved) %>%
         select(c(1,2,3,6,5,4,7))
+
+grequests <- ggplot(od, aes(x=Month, y=Requests, colour=Bank)) +
+        geom_line() +
+        ggtitle("Заявки")
+gapproved <- ggplot(od, aes(x=Month, y=Approved, colour=Bank)) +
+        geom_line() +
+        ggtitle("Одобрено")
+gissues <- ggplot(od, aes(x=Month, y=Issues, colour=Bank)) +
+        geom_line() +
+        ggtitle("Выдано")
