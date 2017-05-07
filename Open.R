@@ -1,6 +1,6 @@
 library(dplyr);library(tidyr);library(readxl);library(readr);library(ggplot2);
 
-od <- read_xlsx("Open/OpenRisk.xlsx", 
+od <- read_xlsx("OpenBank/OpenRisk.xlsx", 
                 col_names = c("Bank","Operation type",paste(rep("M",24),1:24,sep = "")),
                 skip = 2)
 od <- od %>%

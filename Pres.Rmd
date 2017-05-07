@@ -4,6 +4,7 @@ output:
   html_notebook: default
   html_document: default
   pdf_document: default
+  md_document: default
 ---
 ```{r setup, include=FALSE,message=FALSE,warning=FALSE}
 knitr::opts_chunk$set(echo = FALSE,warning = FALSE)
