@@ -1,0 +1,221 @@
+---
+title: "Задание банка Открытие"
+output:
+  word_document: 
+    fig_height: 9
+    fig_width: 12
+    df_print: "kable"
+  html_document: default
+  md_document: default
+  html_notebook: default
+---
+```{r setup, include=FALSE,message=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE)
+library(dplyr);library(tidyr);library(readxl);library(readr);library(ggplot2);
+library(knitr);library(Rmisc);library(Hmisc);library(dunn.test)
+```
+# Анализ
+Считаем данные и подготовим их к анализу, приведя к чистому виду. (См. приложение "Подготовка данных")
+
+```{r}
+od <- read_excel("OpenRisk.xlsx", 
+                col_names = c("Bank","Parameter",paste(rep("M",24),1:24,sep = "")),
+                skip = 2)
+
+od <- od %>%
+        gather(Month, number, M1:M24) %>%
+        mutate (Bank = rep(LETTERS[1:5],each = 3,times = 24)) %>%
+        spread(`Parameter`, number) %>%
+        mutate(Month = parse_number(Month)) %>%
+        arrange(Bank,Month) %>%
+        select (1,2,Requests = 4,Approval = 5,Issues = 3)
+od <- od %>%
+        mutate(Approved = Requests*Approval,Acceptance = Issues/Approved) %>%
+        select(c(1,2,3,6,5,4,7))
+odl <- od %>%
+        gather(variable,value,Requests:Acceptance) %>%
+        mutate(variable = factor(variable,levels = names(od)[3:7]))
+ABS <- names(od)[3:5]
+REL <- names(od)[6:7]
+```
+
+В таблице нет информации за первые месяцы от банков **D** и **E**  - возможно,
+они недавно открылись. Более примечательно, что от банка **E** нет информации за последние месяцы.
+Возникает предположение, что это отделение закрылось. Посмотрим, есть ли какие-то очевидные поводы для такого решения.
+
+Построим графики абсолютных показателей (количество поданных заявок, одобренных заявок и выданных кредитов):
+
+```{r Lines}
+ggplot(filter(odl,variable %in% ABS), 
+       aes(x = Month, y = value, color = Bank)) + 
+    geom_line() +
+    facet_grid(variable ~ ., scale = "free_y")
+```
+
+Действительно, в банк **E** долгое время подавалось наименьшее количество заявок, почти
+всегда там одобрялось наименьшее количество заявок и всегда там выпускалось наименьшее 
+количество кредитов. Возможно, он находился в районе с малым числом потенциальных клиентов.
+
+Чтобы не нарушать предпосылок таких тестов, как ANOVA и тест Тьюки (см. приложение "Распределение абсолютных показателей"), воспользуемся непараметрическим тестом Данна, чтобы узнать, в какие банки подавалось статистически больше заявок. (см. приложение "Результаты статистических тестов")
+Наибольшее отличие от всех остальных видно в банке **D**. Менее всего различаются пары **A** и **C**, а так же **B** и **E**. Возможно, другие банки проводили более гибкую кредитную политику. Посмотрим на общее количество абсолютных показателей за  всё время:
+```{r Barchart}
+asum <- data.frame(Bank = rep("A",3),Var = ABS, Val = c(sum(od$Requests[od$Bank=="A"]),
+                                                            sum(od$Approved[od$Bank=="A"]),
+                                                        sum(od$Issues[od$Bank=="A"])))
+bsum <- data.frame(Bank = rep("B",3),Var = ABS, Val = c(sum(od$Requests[od$Bank=="B"]),
+                                                            sum(od$Approved[od$Bank=="B"]),
+                                                        sum(od$Issues[od$Bank=="B"])))
+csum <- data.frame(Bank = rep("C",3),Var = ABS, Val = c(sum(od$Requests[od$Bank=="C"]),
+                                                            sum(od$Approved[od$Bank=="C"]),
+                                                        sum(od$Issues[od$Bank=="C"])))
+dsum <- data.frame(Bank = rep("D",3),Var = ABS, Val = c(sum(od$Requests[od$Bank=="D"],
+                                                            na.rm = T),
+                                                           sum(od$Approved[od$Bank=="D"],
+                                                               na.rm = T),
+                                                        sum(od$Issues[od$Bank=="D"],
+                                                            na.rm = T)))
+esum <- data.frame(Bank = rep("E",3),Var = ABS, Val = c(sum(od$Requests[od$Bank=="E"],
+                                                            na.rm = T),
+                                                            sum(od$Approved[od$Bank=="E"],
+                                                                na.rm = T),
+                                                        sum(od$Issues[od$Bank=="E"],
+                                                            na.rm = T)))
+allsum <- rbind(asum,bsum,csum,dsum,esum)
+allsum$Var <- factor(allsum$Var,levels = ABS)
+ggplot(allsum, aes(Bank, Val)) + 
+    geom_bar(stat = "identity", aes(fill = Var), position = "dodge")
+```
+
+Действительно, в банк **E** было подано на 27% заявок меньше, чем в банк  **B**, а в банки **A** и **C** соответственно на 53% и 60% больше, однако, число одобренных и выданных кредитов в банке **B** даже больше, чем в последних.
+Взглянем на относительные уровни одобрения и согласия (проценты одобренных заявок из общего количества и выданных кредитов из количества одобренных соответственно).
+```{r Boxpl}
+ggplot(filter(odl,variable %in% REL), 
+       aes(x = Bank, y = value, fill = Bank)) + 
+    geom_boxplot() +
+    facet_grid(variable ~ ., scale = "free_y")
+```
+
+В самом деле, банк **B** одобрял в среднем даже больше самого успешного банка **D**. Возможно, последний находится в густонаселенном районе и подобная политика привела к лояльности клиентов к банку, что и стало причиной его успеха. Тогда банку **B** стоит продолжать придерживаться данной стратегии, если это не приводит к росту невыплаченных задолжностей.
+Продолжим анализ и посмотрим, какие из этих различий статистически значимые (см. приложение "Результаты статистических тестов").
+
+По уровню одобрения, банки **B** и **D** действительно похожи, а предположительно закрытый банк **E** сильно отличается от всех остальных. Больше всего с ним статистически схож банк **A**.
+По уровню согласия на одобренные условия банк **E** уступает всем остальным. Однако и в банке **C** клиенты берут одобренные кредиты статистически меньше, чем в банках **A**,**B** и **D**. 
+Эти замечания являются поводом для пересмотра кредитной политики в банках **A** и **C**. Такая строгость при одобрении может послужить причиной потери лояльности клиентов и повторения судьбы банка **E**.
+ 
+# Резюме
+Исходя из приведённого анализа можно сделать следующие выводы:
+
+* Если гибкая кредитная политика банков **B** и **D**, характеризующаяся высоким процентом одобрения заявок, не приводит к росту задолженности клиентов и прибыльности банка, но вызывает приток лояльных клиентов, её можно считать успешной.
+
+* Строгая кредитная политика банка **E** приводит к оттоку клиентов и малой популярности. В связи с этим, банкам **A** и **C** следует обратить внимание на свои порядки одобрения заявок.
+
+* Анализ следовало бы продолжить, опираясь на дополнительные данные. Определение эффективности и выбор модели одобрения должен быть результатом анализа таких показателей, как параметры региона, макроэкономической ситуации и даже самого банка.
+
+* Так же в дальнейшем анализе потребуется пропущенная информация, возможно, вычисленная по некоторой модели (если её нельзя добыть, например, потому что эти банки в эти месяцы были закрыты), чтобы мы имели полную картину хотя бы за два полных периода. Тогда будет полезно сделать попарные сравнения первых и последних 12 месяцев для каждого банка, чтобы сделать вывод о последствиях их кредитной политики. Возможно, негативные эффекты уже сказываются на банках **A** и **C**. 
+
+* Более того, имея информацию как минимум о двух периодах, было бы полезно проанализировать данные, как временные ряды. Возможно, исходя из анализа сезонности, мы смогли бы объяснить отличия в видах линий, пики и их разнонаправленность, которые мы видим на графиках показателей, нормированных на отрезок [0,1].
+```{r ggNorm}
+# Normazile to 0-1
+normalize <- function(vec) {
+    answer <- (vec - min(vec, na.rm = T))/(max(vec, na.rm = T) - min(vec, na.rm = T))
+    return(answer)
+}
+
+odl$Normalized <- ave(odl$value, odl$Bank, odl$variable, FUN = normalize)
+
+ggplot(odl, 
+       aes(x = Month, y = Normalized, color = Bank)) + 
+    geom_line() +
+    facet_grid(variable ~ .)
+```
+
+# Приложения
+## Подготовка данных
+Для начала считаем данные из файла и взглянем на них.
+```{r table1}
+od <- read_excel("OpenRisk.xlsx", 
+                col_names = c("Bank","Parameter",paste(rep("M",24),1:24,sep = "")),
+                skip = 2)
+#kable(head(od)[,1:7],digits = 3,align = "c")
+#        kable_styling(full_width = TRUE)
+head(od)[,1:7]
+```
+
+Приведём данные к *чистому* виду. Каждое наблюдение будет в своём ряду, каждый показатель - в своём столбце.
+
+```{r table 2}
+od <- od %>%
+        gather(Month, number, M1:M24) %>%
+        mutate (Bank = rep(LETTERS[1:5],each = 3,times = 24)) %>%
+        spread(`Parameter`, number) %>%
+        mutate(Month = parse_number(Month)) %>%
+        arrange(Bank,Month) %>%
+        select (1,2,Requests = 4,Approval = 5,Issues = 3)
+kable(head(od), digits = c(0,0,0,3,0),align = "c")
+   #     kable_styling(full_width = TRUE)
+```
+
+Данные отсортированы по месяцам внутри каждого отдельного банка. В конце таблицы
+будут данные за последние месяцы 5 банка, который мы обозначили за **E**.
+
+```{r table 3}
+kable(tail(od),digits = c(0,0,0,3,0),align = "c")
+#tail(od)
+```
+
+Тут же мы видим, что некоторые данные в таблице отсутствуют. Всего строк с пропущенными
+значениями в файле `r sum(!complete.cases(od))`. Это не так много, поэтому взглянем на
+них.
+
+```{r table 4}
+kable(od[!complete.cases(od),],align = "c")
+#od[!complete.cases(od),]
+```
+
+Для эффективности анализа добавим в нашу таблицу столбцы с абсолютным количеством одобренных заявок, а так же "уровень согласия" - то есть процент одобренных заявок, на которые согласились клиенты.
+
+```{r table 5}
+od <- od %>%
+        mutate(Approved = Requests*Approval,Acceptance = Issues/Approved) %>%
+        select(c(1,2,3,6,5,4,7))
+odl <- od %>%
+        gather(variable,value,Requests:Acceptance) %>%
+        mutate(variable = factor(variable,levels = names(od)[3:7]))
+ABS <- names(od)[3:5]
+REL <- names(od)[6:7]
+kable(head(od),digits = c(0,0,0,0,0,3,3),align = "c")
+#od
+```
+
+## Распределение абсолютных показателей
+Так выглядят гистограммы наших абсолютных показателей:
+```{r Hist,message=FALSE}
+ggplot(filter(odl,variable %in% ABS), 
+       aes(x = value, fill = Bank)) + 
+    geom_histogram(alpha = 0.5) +
+    facet_grid(. ~ variable, scales = "free_x") + 
+    theme(legend.position = "top")
+```
+
+Видно, что они имеют далеко не нормальное распределение. Простое логарифмирование тоже нормализует слишком грубо:
+```{r Dens}
+ggplot(filter(odl,variable %in% ABS), 
+       aes(x = log(value), fill = Bank)) + 
+    geom_density(alpha = 0.5) +
+    facet_grid(variable ~ ., scales = "free_y")
+```
+
+Хотя есть ряд работ, утверждающих, что дисперсионный анализ достаточно устойчив к нарушению условия нормальности распределения, лучше воспользуемся непараметрическим тестом Данна.
+
+## Результаты статистических тестов
+```{r DunnReq}
+dunn.test(od$Requests,od$Bank,method = "bonferroni")
+```
+
+```{r DunnApp}
+dunn.test(od$Approval,od$Bank,method = "bonferroni")
+```
+
+```{r DunnAcc}
+dunn.test(od$Acceptance,od$Bank,method = "bonferroni")
+```
